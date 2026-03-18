@@ -44,7 +44,7 @@ grafana:
 
   persistence:
     enabled: true
-    storageClassName: ssd
+#    storageClassName: ssd
   sidecar:
     dashboards:
       searchNamespace: ALL
