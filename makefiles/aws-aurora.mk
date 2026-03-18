@@ -1,0 +1,400 @@
+.PHONY: get-eks-subnets
+get-eks-subnets:
+	aws eks describe-cluster --name $(CLUSTER) --region $(AWS_REGION) \
+	  --query 'cluster.resourcesVpcConfig.subnetIds' --output text
+
+.PHONY: create-db-subnet-group-from-eks
+create-db-subnet-group-from-eks:
+	@echo "🔍 Filtering EKS subnets for Public access only..."
+	$(eval EKS_SUBNETS := $(shell aws eks describe-cluster --name $(DEPLOYMENT_NAME) --region $(AWS_REGION) \
+		--query 'cluster.resourcesVpcConfig.subnetIds' --output text))
+
+	@# Filter loop to find only public subnets
+	@PUBLIC_SUBNETS=""; \
+	for s in $(EKS_SUBNETS); do \
+		IGW=$$(aws ec2 describe-route-tables --region $(AWS_REGION) \
+			--filters "Name=association.subnet-id,Values=$$s" \
+			--query "RouteTables[*].Routes[?DestinationCidrBlock=='0.0.0.0/0'].GatewayId" --output text); \
+		if [[ $$IGW == igw-* ]]; then \
+			PUBLIC_SUBNETS="$$PUBLIC_SUBNETS $$s"; \
+		fi; \
+	done; \
+	\
+	if [ -z "$$PUBLIC_SUBNETS" ]; then \
+		echo "❌ Error: No public subnets found among EKS subnets!"; exit 1; \
+	fi; \
+	\
+	echo "🚀 Creating DB Subnet Group with: $$PUBLIC_SUBNETS"; \
+	aws rds create-db-subnet-group \
+		--db-subnet-group-name $(DEPLOYMENT_NAME)-aurora-group \
+		--db-subnet-group-description "Public-only Aurora group for $(DEPLOYMENT_NAME)" \
+		--subnet-ids $$PUBLIC_SUBNETS \
+		--region $(AWS_REGION) \
+		--no-cli-pager
+
+#.PHONY: create-db-subnet-group-from-eks
+#create-db-subnet-group-from-eks:
+#	$(eval SUBNETS := $(shell aws eks describe-cluster --name $(DEPLOYMENT_NAME) --region $(AWS_REGION) \
+#	  --query 'cluster.resourcesVpcConfig.subnetIds' --output text))
+##	$(eval VPC_ID := $(shell aws ec2 describe-vpcs --filters "Name=tag:Name,Values=$(VPC_NAME)" --query "Vpcs[0].VpcId" --output text))
+##	$(eval SUBNETS := $(shell aws ec2 describe-subnets --filters "Name=vpc-id,Values=$(VPC_ID)" --query "Subnets[*].SubnetId" --output text))
+#	aws rds create-db-subnet-group \
+#		--db-subnet-group-name $(DEPLOYMENT_NAME)-aurora-group \
+#		--db-subnet-group-description "Subnet Aurora db group for $(DEPLOYMENT_NAME)" \
+#		--subnet-ids $(SUBNETS) \
+#		--no-cli-pager
+
+.PHONY: create-aurora-db-secret
+create-aurora-db-secret: delete-aurora-db-secret
+	@echo "Creating secret in AWS Secrets Manager..."
+	aws secretsmanager create-secret \
+		--name $(DEPLOYMENT_NAME)-db-secret \
+		--description "Admin credentials for $(DEPLOYMENT_NAME) Aurora cluster" \
+		--secret-string '{"username":"$(POSTGRES_MASTER_USERNAME)","password":"$(POSTGRES_MASTER_PASSWORD)"}' \
+		--no-cli-pager
+
+.PHONY: delete-aurora-db-secret
+delete-aurora-db-secret:
+	@echo "Deleting secret: $(DEPLOYMENT_NAME)-db-secret..."
+	-aws secretsmanager delete-secret \
+		--secret-id $(DEPLOYMENT_NAME)-db-secret \
+		--force-delete-without-recovery \
+		--no-cli-pager
+	@echo "Secret scheduled for immediate deletion."
+
+.PHONY: create-aurora-db
+create-aurora-db: create-db-subnet-group-from-eks
+	aws rds create-db-cluster \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--engine aurora-postgresql \
+		--master-username $(POSTGRES_MASTER_USERNAME) \
+		--master-user-password $(POSTGRES_MASTER_PASSWORD) \
+		--db-subnet-group-name $(DEPLOYMENT_NAME)-aurora-group \
+		--no-cli-pager
+
+	@echo "Waiting for cluster to initialize..."
+	aws rds wait db-cluster-available --db-cluster-identifier $(DEPLOYMENT_NAME)-cluster
+
+	@echo "Creating Instance..."
+	aws rds create-db-instance \
+		--db-instance-identifier $(DEPLOYMENT_NAME)-instance \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--engine aurora-postgresql \
+		--db-instance-class db.t3.medium \
+		--publicly-accessible \
+		--no-cli-pager
+
+	@echo "Waiting for instance $(DEPLOYMENT_NAME)-instance to reach 'Available' state..."
+	aws rds wait db-instance-available \
+		--db-instance-identifier $(DEPLOYMENT_NAME)-instance \
+		--no-cli-pager
+	@echo "Instance is ready for connections."
+
+.PHONY: _setup-db
+_setup-db:
+	@echo "Fetching master password and endpoint..."
+	$(eval DB_HOST := $(shell aws rds describe-db-clusters \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--query "DBClusters[0].Endpoint" --output text))
+
+	@echo "Connecting to $(DB_HOST) to provision $(DB_NAME) database and user..."
+	@export PGPASSWORD=$(POSTGRES_MASTER_PASSWORD); \
+	psql -h $(DB_HOST) -U $(POSTGRES_MASTER_USERNAME) -d postgres \
+		-c "CREATE DATABASE $(DB_NAME);" \
+		-c "CREATE USER $(DB_USER) WITH PASSWORD '$(DEFAULT_PASSWORD)';" \
+		-c "GRANT ALL PRIVILEGES ON DATABASE $(DB_NAME) TO $(DB_USER);"
+
+	@echo "Configuring schema permissions on $(DB_NAME)..."
+	@export PGPASSWORD=$(POSTGRES_MASTER_PASSWORD); \
+	psql -h $(DB_HOST) -U $(POSTGRES_MASTER_USERNAME) -d $(DB_NAME) \
+		-c "GRANT ALL ON SCHEMA public TO $(DB_USER);" \
+		-c "ALTER SCHEMA public OWNER TO $(DB_USER);" \
+		-c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $(DB_USER);"
+
+	@echo "--------------------------------------------------"
+	@echo "$(DB_LABEL) Database and User created successfully."
+	@echo "Database: $(DB_NAME)"
+	@echo "User: $(DB_USER)"
+	@echo "--------------------------------------------------"
+
+.PHONY: _cleanup-db
+_cleanup-db:
+	@echo "Fetching master password and endpoint..."
+	$(eval DB_HOST := $(shell aws rds describe-db-clusters \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--query "DBClusters[0].Endpoint" --output text))
+
+	@echo "Terminating active connections and dropping $(DB_NAME)..."
+	@export PGPASSWORD=$(POSTGRES_MASTER_PASSWORD); \
+	psql -h $(DB_HOST) -U $(POSTGRES_MASTER_USERNAME) -d postgres \
+		-c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$(DB_NAME)' AND pid <> pg_backend_pid();" \
+		-c "DROP DATABASE IF EXISTS $(DB_NAME);" \
+		-c "DROP USER IF EXISTS $(DB_USER);"
+
+	@echo "--------------------------------------------------"
+	@echo "$(DB_LABEL) Database and User removed."
+	@echo "--------------------------------------------------"
+
+.PHONY: setup-camunda-db
+setup-camunda-db:
+	@$(MAKE) _setup-db DB_NAME=$(POSTGRES_CAMUNDA_DB) DB_USER=$(POSTGRES_CAMUNDA_USERNAME) DB_LABEL=Camunda
+
+.PHONY: setup-modeler-db
+setup-modeler-db:
+	@$(MAKE) _setup-db DB_NAME=$(POSTGRES_MODELER_DB) DB_USER=$(POSTGRES_MODELER_USERNAME) DB_LABEL=Modeler
+
+.PHONY: setup-keycloak-db
+setup-keycloak-db:
+	@$(MAKE) _setup-db DB_NAME=$(POSTGRES_KEYCLOAK_DB) DB_USER=$(POSTGRES_KEYCLOAK_USERNAME) DB_LABEL=Keycloak
+
+.PHONY: setup-identity-db
+setup-identity-db:
+	@$(MAKE) _setup-db DB_NAME=$(POSTGRES_IDENTITY_DB) DB_USER=$(POSTGRES_IDENTITY_USERNAME) DB_LABEL=Identity
+
+.PHONY: setup-all-dbs
+setup-all-dbs: setup-modeler-db setup-keycloak-db setup-identity-db
+	@echo "✨ All Camunda databases and users have been provisioned."
+
+.PHONY: cleanup-camunda-db
+cleanup-camunda-db:
+	@$(MAKE) _cleanup-db DB_NAME=$(POSTGRES_CAMUNDA_DB) DB_USER=$(POSTGRES_CAMUNDA_USERNAME) DB_LABEL=Camunda
+
+.PHONY: cleanup-modeler-db
+cleanup-modeler-db:
+	@$(MAKE) _cleanup-db DB_NAME=$(POSTGRES_MODELER_DB) DB_USER=$(POSTGRES_MODELER_USERNAME) DB_LABEL=Modeler
+
+.PHONY: cleanup-keycloak-db
+cleanup-keycloak-db:
+	@$(MAKE) _cleanup-db DB_NAME=$(POSTGRES_KEYCLOAK_DB) DB_USER=$(POSTGRES_KEYCLOAK_USERNAME) DB_LABEL=Keycloak
+
+.PHONY: cleanup-identity-db
+cleanup-identity-db:
+	@$(MAKE) _cleanup-db DB_NAME=$(POSTGRES_IDENTITY_DB) DB_USER=$(POSTGRES_IDENTITY_USERNAME) DB_LABEL=Identity
+
+.PHONY: cleanup-all-dbs
+cleanup-all-dbs: cleanup-modeler-db cleanup-keycloak-db cleanup-identity-db
+	@echo "🗑️  All Camunda databases and users have been removed."
+
+.PHONY: list-tables-modeler list-tables-keycloak list-tables-identity
+
+.PHONY: _list-tables
+_list-tables:
+	@echo "--- Tables in $(DB_LABEL) ($(DB_NAME)) ---"
+	@export PGPASSWORD=$(POSTGRES_MASTER_PASSWORD); \
+	psql -h $(POSTGRES_HOST) -U $(POSTGRES_MASTER_USERNAME) -d $(DB_NAME) -c "\dt"
+
+.PHONY: list-tables-modeler
+list-tables-modeler:
+	@$(MAKE) _list-tables DB_NAME=$(POSTGRES_MODELER_DB) DB_LABEL=Modeler
+
+.PHONY: list-tables-keycloak
+list-tables-keycloak:
+	@$(MAKE) _list-tables DB_NAME=$(POSTGRES_KEYCLOAK_DB) DB_LABEL=Keycloak
+
+.PHONY: list-tables-identity
+list-tables-identity:
+	@$(MAKE) _list-tables DB_NAME=$(POSTGRES_IDENTITY_DB) DB_LABEL=Identity
+
+.PHONY: list-tables-camunda
+list-tables-camunda:
+	@$(MAKE) _list-tables DB_NAME=$(POSTGRES_CAMUNDA_DB) DB_LABEL=Camunda
+
+.PHONY: destroy-aurora-db
+destroy-aurora-db: revoke-local-to-rds revoke-eks-to-rds delete-aurora-db-secret
+	@echo "Deleting RDS Instance: $(DEPLOYMENT_NAME)-instance..."
+	-aws rds delete-db-instance \
+		--db-instance-identifier $(DEPLOYMENT_NAME)-instance \
+		--skip-final-snapshot \
+		--no-cli-pager
+
+	@echo "Waiting for instance to be deleted (this may take a few minutes)..."
+	@aws rds wait db-instance-deleted --db-instance-identifier $(DEPLOYMENT_NAME)-instance
+
+	@echo "Deleting RDS Cluster: $(DEPLOYMENT_NAME)-cluster..."
+	-aws rds delete-db-cluster \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--skip-final-snapshot \
+		--no-cli-pager
+
+	@echo "Waiting for cluster to be deleted..."
+	@# Note: There is no 'wait db-cluster-deleted' in some CLI versions,
+	@# so we loop until the describe command fails or returns nothing.
+	@while aws rds describe-db-clusters --db-cluster-identifier $(DEPLOYMENT_NAME)-cluster >/dev/null 2>&1; do \
+		sleep 10; \
+		echo "Still deleting cluster..."; \
+	done
+
+	@echo "Deleting DB Subnet Group: $(DEPLOYMENT_NAME)-aurora-group..."
+	-aws rds delete-db-subnet-group --db-subnet-group-name $(DEPLOYMENT_NAME)-aurora-group --no-cli-pager
+	@echo "Database infrastructure for $(DEPLOYMENT_NAME) destroyed successfully."
+
+.PHONY: allow-local-to-rds
+allow-local-to-rds:
+	@echo "Detecting public IP..."
+	$(eval MY_IP := $(shell curl -s https://checkip.amazonaws.com))
+	@echo "Your Public IP is: $(MY_IP)"
+
+	@echo "Looking up Security Group for $(DEPLOYMENT_NAME)-cluster..."
+	$(eval SG_ID := $(shell aws rds describe-db-clusters \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--query "DBClusters[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+		--no-cli-pager --output text))
+
+	@echo "Opening port 5432 for $(MY_IP)/32 on Security Group $(SG_ID)..."
+	@aws ec2 authorize-security-group-ingress \
+		--group-id $(SG_ID) \
+		--protocol tcp \
+		--port 5432 \
+		--cidr $(MY_IP)/32 \
+		--no-cli-pager || echo "Access already open or rule exists."
+
+.PHONY: revoke-local-to-rds
+revoke-local-to-rds:
+	$(eval MY_IP := $(shell curl -s https://checkip.amazonaws.com))
+	$(eval SG_ID := $(shell aws rds describe-db-clusters \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--query "DBClusters[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+		--no-cli-pager --output text))
+	@echo "Revoking access for $(MY_IP)..."
+	-@aws ec2 revoke-security-group-ingress \
+		--group-id $(SG_ID) \
+		--protocol tcp \
+		--port 5432 \
+		--cidr $(MY_IP)/32 \
+		--no-cli-pager
+
+.PHONY: check-public-access
+check-public-access:
+	@echo "Checking if Aurora subnets are in Public Route Tables..."
+	@# Using the key you verified: DBSubnetGroup
+	$(eval GROUP_NAME := $(shell aws rds describe-db-clusters \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--region $(AWS_REGION) \
+		--query "DBClusters[0].DBSubnetGroup" --output text 2>/dev/null))
+
+	@if [ -z "$(GROUP_NAME)" ] || [ "$(GROUP_NAME)" = "None" ]; then \
+		echo "❌ Error: Could not find DB Subnet Group. Verify Cluster ID and Region."; \
+		exit 1; \
+	fi; \
+	\
+	SUBNETS=$$(aws rds describe-db-subnet-groups \
+		--db-subnet-group-name $(GROUP_NAME) \
+		--region $(AWS_REGION) \
+		--query "DBSubnetGroups[0].Subnets[*].SubnetIdentifier" --output text); \
+	for s in $$SUBNETS; do \
+		IGW=$$(aws ec2 describe-route-tables --region $(AWS_REGION) \
+			--filters "Name=association.subnet-id,Values=$$s" \
+			--query "RouteTables[*].Routes[?DestinationCidrBlock=='0.0.0.0/0'].GatewayId" --output text); \
+		if [[ $$IGW == igw-* ]]; then \
+			echo "✅ Subnet $$s is PUBLIC (Gateway: $$IGW)"; \
+		else \
+			echo "❌ Subnet $$s is PRIVATE (No IGW found)"; \
+		fi; \
+	done
+
+# The Aurora subnet group is using the eks subnets. Two are public and two are private.
+# Sometimes the rds writer endpoint resolves to a private subnet.
+# If the check-public-access shows private subnets, use this target to add a specific route for your IP to the IGW.
+.PHONY: allow-local-to-subnets
+allow-local-to-subnets:
+	@echo "🔍 Detecting network and local IP..."
+	$(eval MY_IP := $(shell curl -s ifconfig.me))
+	$(eval VPC_ID := $(shell aws rds describe-db-instances \
+		--db-instance-identifier $(DEPLOYMENT_NAME)-instance \
+		--query "DBInstances[0].DBSubnetGroup.VpcId" --output text))
+	$(eval IGW_ID := $(shell aws ec2 describe-internet-gateways \
+		--filters "Name=attachment.vpc-id,Values=$(VPC_ID)" \
+		--query "InternetGateways[0].InternetGatewayId" --output text))
+
+	@if [ -z "$(MY_IP)" ]; then echo "❌ Could not detect local IP"; exit 1; fi
+	@echo "✅ Your IP: $(MY_IP)"
+	@echo "✅ IGW ID: $(IGW_ID)"
+
+	@SUBNETS=$$(aws rds describe-db-subnet-groups \
+		--db-subnet-group-name $(shell aws rds describe-db-clusters \
+			--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+			--query "DBClusters[0].DBSubnetGroup" --output text) \
+		--query "DBSubnetGroups[0].Subnets[*].SubnetIdentifier" --output text); \
+	for s in $$SUBNETS; do \
+		RT_ID=$$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$$s" --query "RouteTables[0].RouteTableId" --output text); \
+		echo "🛰️  Adding /32 route for $(MY_IP) to IGW in Table $$RT_ID..."; \
+		aws ec2 create-route \
+			--route-table-id $$RT_ID \
+			--destination-cidr-block $(MY_IP)/32 \
+			--gateway-id $(IGW_ID) 2>/dev/null || \
+	done
+	@echo "✨ Specific route added. EKS traffic remains on the NAT Gateway."
+
+
+# Usage: make allow-eks-to-rds DEPLOYMENT_NAME=<name>
+.PHONY: allow-eks-to-rds
+allow-eks-to-rds:
+	@echo "Discovering Security Group IDs..."
+	$(eval RDS_SG := $(shell aws rds describe-db-clusters \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--query "DBClusters[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+		--no-cli-pager --output text))
+
+	$(eval EKS_SG := $(shell aws eks describe-cluster \
+		--name $(DEPLOYMENT_NAME) \
+		--query "cluster.resourcesVpcConfig.clusterSecurityGroupId" \
+		--no-cli-pager --output text))
+
+	@echo "RDS Security Group: $(RDS_SG)"
+	@echo "EKS Node Security Group: $(EKS_SG)"
+
+	@echo "Authorizing TCP port 5432 ingress from EKS to RDS..."
+	aws ec2 authorize-security-group-ingress \
+		--group-id $(RDS_SG) \
+		--protocol tcp \
+		--port 5432 \
+		--source-group $(EKS_SG) \
+		--no-cli-pager || echo "Rule might already exist, skipping..."
+
+.PHONY: revoke-eks-to-rds
+revoke-eks-to-rds:
+	@echo "Discovering Security Group IDs for cleanup..."
+	$(eval RDS_SG := $(shell aws rds describe-db-clusters \
+		--db-cluster-identifier $(DEPLOYMENT_NAME)-cluster \
+		--query "DBClusters[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+		--no-cli-pager --output text))
+
+	$(eval EKS_SG := $(shell aws eks describe-cluster \
+		--name $(DEPLOYMENT_NAME) \
+		--query "cluster.resourcesVpcConfig.clusterSecurityGroupId" \
+		--no-cli-pager --output text))
+
+	@echo "RDS Security Group: $(RDS_SG)"
+	@echo "EKS Node Security Group: $(EKS_SG)"
+
+	@echo "Revoking TCP port 5432 ingress from EKS to RDS..."
+	@aws ec2 revoke-security-group-ingress \
+		--group-id $(RDS_SG) \
+		--protocol tcp \
+		--port 5432 \
+		--source-group $(EKS_SG) \
+		--no-cli-pager || echo "Rule not found or already removed, skipping..."
+
+.PHONY: set-postgres-host
+set-postgres-host:
+	$(eval POSTGRES_HOST := $(shell aws rds describe-db-clusters --db-cluster-identifier $(DEPLOYMENT_NAME)-cluster --query "DBClusters[0].Endpoint" --output text 2>/dev/null))
+
+.PHONY: test-aurora-from-local
+test-aurora-from-local:
+	$(eval DB_HOST := $(shell aws rds describe-db-clusters --db-cluster-identifier $(DEPLOYMENT_NAME)-cluster --query "DBClusters[0].Endpoint" --output text))
+	@PGPASSWORD='$(POSTGRES_MASTER_PASSWORD)' psql -h $(DB_HOST) -U $(POSTGRES_MASTER_USERNAME) -d postgres -c "SELECT version();"
+
+# Usage: make get-db-url DEPLOIYMENT_NAME=my-aurora
+.PHONY: get-aurora-connection-string
+get-aurora-connection-string:
+	$(eval ENDPOINT := $(shell aws rds describe-db-clusters --db-cluster-identifier $(DEPLOYMENT_NAME)-cluster --query "DBClusters[0].Endpoint" --output text))
+	@echo "PostgreSQL Connection String:"
+	@echo "postgresql://$(POSTGRES_MASTER_USERNAME):$(POSTGRES_MASTER_PASSWORD)@$(ENDPOINT):5432/postgres"
+
+# Usage: make test-db-link RDS_ENDPOINT=xyz.cluster-123.us-east-1.rds.amazonaws.com
+.PHONY: test-aurora-from-eks
+test-aurora-from-eks:
+	$(eval ENDPOINT := $(shell aws rds describe-db-clusters --db-cluster-identifier $(DEPLOYMENT_NAME)-cluster --query "DBClusters[0].Endpoint" --output text))
+	@echo "Testing connectivity to $(ENDPOINT)..."
+	kubectl run db-ping-test --rm -it --image=busybox --restart=Never -- \
+		nc -zv -w 5 $(ENDPOINT) 5432

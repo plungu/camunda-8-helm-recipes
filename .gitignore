@@ -1,0 +1,4 @@
+.idea/
+**/camunda-values.yaml
+**/cluster.yaml
+/config.mk
