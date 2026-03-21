@@ -18,7 +18,7 @@ create-keycloak-admin-user:
 
 .PHONY: keycloak-password
 keycloak-password:
-	$(eval kcPassword := $(shell kubectl get secret --namespace $(CAMUNDA_NAMESPACE) "$(CAMUNDA_RELEASE_NAME)-keycloak" -o jsonpath="{.data.admin-password}" | base64 --decode))
+	$(eval kcPassword := $(shell kubectl get secret --namespace $(CAMUNDA_NAMESPACE) "camunda-credentials" -o jsonpath="{.data.identity-keycloak-admin-password}" | base64 --decode))
 	@echo KeyCloak Admin password: $(kcPassword)
 
 

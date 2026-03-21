@@ -1,0 +1,57 @@
+# Theses are the default values used by this recipe
+# Create a config.mk file in the root directory of this project to override variables for your specific environment
+
+DEPLOYMENT_NAME ?= mydeployment
+
+POSTGRES_MASTER_USERNAME ?= postgres
+POSTGRES_MASTER_PASSWORD ?= CHANGEME
+
+POSTGRES_KEYCLOAK_DB ?= bitnami_keycloak
+POSTGRES_KEYCLOAK_USERNAME ?= bn_keycloak
+
+POSTGRES_IDENTITY_DB ?= identity
+POSTGRES_IDENTITY_USERNAME ?= identity
+
+POSTGRES_MODELER_DB ?= modeler
+POSTGRES_MODELER_USERNAME ?= modeler
+
+# Camunda installation
+CAMUNDA_NAMESPACE ?= camunda
+CAMUNDA_RELEASE_NAME ?= camunda
+
+CAMUNDA_CHART ?= camunda/camunda-platform
+CAMUNDA_HELM_CHART_VERSION ?= 14.0.0-alpha4
+CAMUNDA_VERSION ?= 8.9.0-alpha4
+
+CAMUNDA_HELM_VALUES ?= \
+  $(root)/camunda-values.yaml.d/disable-all.yaml \
+  $(root)/camunda-values.yaml.d/enable-elasticsearch.yaml \
+  $(root)/camunda-values.yaml.d/enable-ingress-nginx.yaml \
+  $(root)/camunda-values.yaml.d/enable-metrics.yaml \
+  $(root)/camunda-values.yaml.d/connectors-oidc.yaml \
+  $(root)/camunda-values.yaml.d/identity-keycloak-internal-postgres.yaml \
+  $(root)/camunda-values.yaml.d/orchestration-elasticsearch.yaml \
+  $(root)/camunda-values.yaml.d/orchestration-oidc.yaml \
+  ./my-camunda-values.yaml
+
+DEFAULT_PASSWORD ?= demo
+
+CAMUNDA_CLUSTER_SIZE ?= 1
+CAMUNDA_REPLICATION_FACTOR ?= 1
+CAMUNDA_PARTITION_COUNT ?= 1
+
+# Networking
+CAMUNDA_INGRESS_NAME ?= camunda-camunda-platform-http
+CAMUNDA_INGRESS_GRPC_NAME ?= camunda-camunda-platform-grpc
+ORCHESTRATION_EXT_URL ?= http://localhost:8080
+
+DOMAIN_NAME ?= example.com
+IDENTITY_EXT_URL ?= http://localhost:8084
+KEYCLOAK_EXT_URL ?= http://localhost:18080
+ORCHESTRATION_EXT_URL ?= http://localhost:8080
+WEB_MODELER_EXT_URL ?= http://localhost:8070
+
+# Keycloak
+KEYCLOAK_ADMIN_USERNAME ?= admin
+KEYCLOAK_REALM ?= camunda-platform
+KEYCLOAK_EXT_URL ?= http://localhost:18080
