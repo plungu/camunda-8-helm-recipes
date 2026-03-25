@@ -14,8 +14,8 @@ CAMUNDA_NAMESPACE ?= camunda
 CAMUNDA_RELEASE_NAME ?= camunda
 CAMUNDA_CHART ?= camunda/camunda-platform
 
-CAMUNDA_HELM_CHART_VERSION ?= 14.0.0-alpha3
-CAMUNDA_VERSION ?= 8.9.0-alpha3
+CAMUNDA_HELM_CHART_VERSION ?= 14.0.0-alpha5
+CAMUNDA_VERSION ?= 8.9.0-alpha5
 
 CAMUNDA_HELM_VALUES ?= \
   $(root)/camunda-values.yaml.d/disable-all.yaml \
