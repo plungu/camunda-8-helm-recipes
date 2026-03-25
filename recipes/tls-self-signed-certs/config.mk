@@ -6,3 +6,7 @@ CAMUNDA_RELEASE_NAME ?= camunda
 
 CERT_NAME ?= camunda
 HOST_NAME ?= example.com
+
+TRUST_STORE_PASS ?= camunda
+
+TLS_SECRET_NAME ?= tls-secret

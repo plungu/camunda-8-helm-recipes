@@ -22,3 +22,4 @@ setup-ingress-nginx: ingress-nginx cert-manager letsencrypt-prod
 
 include $(root)/makefiles/tls-self-signed-cert.mk
 include $(root)/makefiles/tls-keystore.mk
+include $(root)/makefiles/letsencrypt.mk

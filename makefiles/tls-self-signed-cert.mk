@@ -87,4 +87,16 @@ delete-custom-certs: delete-certs-dir
 list-sans:
 	openssl x509 -noout -ext subjectAltName -in ./certs/$(CERT_NAME)Server.crt
 
+.PHONY: create-k8s-tls-secret
+create-k8s-tls-secret:
+	@echo "Creating TLS secret: $(TLS_SECRET_NAME) in namespace: $(CAMUNDA_NAMESPACE)"
+	@kubectl create secret tls $(TLS_SECRET_NAME) \
+		--cert=./certs/$(CERT_NAME)Server.crt \
+		--key=./certs/$(CERT_NAME)Server.key \
+		--namespace=$(CAMUNDA_NAMESPACE) \
+		--dry-run=client -o yaml | kubectl apply -f -
 
+.PHONY: delete-k8s-tls-secret
+delete-k8s-tls-secret:
+	@echo "Deleting secret: $(TLS_SECRET_NAME) from namespace: $(CAMUNDA_NAMESPACE)"
+	@kubectl delete secret $(TLS_SECRET_NAME) --namespace=$(CAMUNDA_NAMESPACE) --ignore-not-found=true
