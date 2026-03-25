@@ -1,0 +1,6 @@
+webModeler:
+  restapi:
+    logging:
+      level:
+        io.camunda.modeler.util.logging.RequestLoggingFilter: DEBUG
+        io.camunda.modeler: DEBUG
