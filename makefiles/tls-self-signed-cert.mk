@@ -87,8 +87,8 @@ delete-custom-certs: delete-certs-dir
 list-sans:
 	openssl x509 -noout -ext subjectAltName -in ./certs/$(CERT_NAME)Server.crt
 
-.PHONY: create-k8s-tls-secret
-create-k8s-tls-secret:
+.PHONY: create-tls-secret
+create-tls-secret:
 	@echo "Creating TLS secret: $(TLS_SECRET_NAME) in namespace: $(CAMUNDA_NAMESPACE)"
 	@kubectl create secret tls $(TLS_SECRET_NAME) \
 		--cert=./certs/$(CERT_NAME)Server.crt \
@@ -96,7 +96,27 @@ create-k8s-tls-secret:
 		--namespace=$(CAMUNDA_NAMESPACE) \
 		--dry-run=client -o yaml | kubectl apply -f -
 
-.PHONY: delete-k8s-tls-secret
-delete-k8s-tls-secret:
+.PHONY: delete-tls-secret
+delete-tls-secret:
 	@echo "Deleting secret: $(TLS_SECRET_NAME) from namespace: $(CAMUNDA_NAMESPACE)"
 	@kubectl delete secret $(TLS_SECRET_NAME) --namespace=$(CAMUNDA_NAMESPACE) --ignore-not-found=true
+
+.PHONY: create-grpc-tls-secret
+create-grpc-tls-secret:
+	@echo "Creating TLS secret: grpc-$(TLS_SECRET_NAME) in namespace: $(CAMUNDA_NAMESPACE)"
+	@kubectl create secret tls grpc-$(TLS_SECRET_NAME) \
+		--cert=./certs/$(CERT_NAME)Server.crt \
+		--key=./certs/$(CERT_NAME)Server.key \
+		--namespace=$(CAMUNDA_NAMESPACE) \
+		--dry-run=client -o yaml | kubectl apply -f -
+
+.PHONY: delete-grpc-tls-secret
+delete-grpc-tls-secret:
+	@echo "Deleting secret: grpc-$(TLS_SECRET_NAME) from namespace: $(CAMUNDA_NAMESPACE)"
+	@kubectl delete secret grpc-$(TLS_SECRET_NAME) --namespace=$(CAMUNDA_NAMESPACE) --ignore-not-found=true
+
+.PHONY: create-tls-secrets
+create-tls-secrets: create-tls-secret create-grpc-tls-secret
+
+.PHONY: delete-tls-secrets
+delete-tls-secrets: delete-tls-secret delete-grpc-tls-secret

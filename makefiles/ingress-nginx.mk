@@ -23,3 +23,7 @@ clean-ingress:
 .PHONY: annotate-ingress-proxy-buffer-size
 annotate-ingress-proxy-buffer-size:
 	kubectl -n $(CAMUNDA_NAMESPACE) annotate ingress camunda-camunda-platform nginx.ingress.kubernetes.io/proxy-buffer-size=128k
+
+.PHONY: ingress-logs-tls
+ingress-logs-tls: 
+	kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx | grep -i "SSL"
