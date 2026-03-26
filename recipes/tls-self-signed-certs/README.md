@@ -14,7 +14,7 @@ This recipe provides:
 - The java `keytool` cli installed
 - GNU `make`
 
-## Usage
+## Create and use a custom CA and self-signed TLS certificate
 
 Edit `config.mk` and set your `CERT_NAME` and other settings.
 
@@ -26,30 +26,41 @@ Open a terminal and run `make`. This will do the following:
 
 The camunda values.yaml files use `tls-secret` and `grpc-tls-secret` secrets inside the ingress rules. So, once the k8s secrets are created, the ingress should start to use your self signed certificate. 
 
-## Clean up
-Run `make clean` to remove the tls secrets and delete the `certs` directory along with all certificate related generated files
+Here's a recorded demo: 
 
-## Troubleshooting TLS Certificates and SSL Connection Issues
+<video src="./docs/create-and-configure-tls.mp4" controls title="How to create and use CA and tls certs" style="max-width: 100%;">
+</video>
 
-NOTE that self signed certificates will NOT be trusted by any operating systems or browsers or by jvms. This is because the CA used to issue these certs is not yet trusted. 
+## Trust the Certificate Authority (CA)
 
-Similarly, large companies often have their own Certificate Authorites that issue tls certificates. Browsers on employees computers are usually configured to trust the company's CA's. However, the CA's are often not trusted by jvm running on employee computers. 
+Here's a video showing how to trust the CA on Mac OS:
 
-The `make crate-truststore` command will create a `truststore.jks` file containing the public certificate of the CA. This is what is needed to allow a jvm to establish tls/ssl connection to a domain using a certificate that has been issued by the CA. 
+<video src="./docs/trust-tls-cert.mp4" controls title="Trust self-signed cert on Mac OS" style="max-width: 100%;">
+</video>
 
-### Configure Mac OS to trust self signed CA 
-
-This make target adds the CA pem file to Mac OS System KeyChain: `make add-ca-cert-to-ios`
+For convenience, it's also possible to use this make target to add the CA pem file to Mac OS System KeyChain: `make add-ca-cert-to-ios`
 
 ![Screenshot 2026-03-25 at 2.40.28 PM.png](docs/Screenshot%202026-03-25%20at%202.40.28%E2%80%AFPM.png)
 
-### Java SSL Connection issues
+## Java SSL Connection issues
 
-If the jvm doesn't trust the CA, then you'll see exceptions like this: 
+Watch this demo to understand how to use the `truststore.jks` file created by `make create-truststore` to allow a jvm to establish tls/ssl connection to a domain using a certificate that has been issued by the CA: 
+
+<video src="./docs/trust-tls-cert-from-java.mp4" controls title="Trust self-signed cert from java" style="max-width: 100%;">
+</video>
+
+If the jvm doesn't trust the CA, then you'll see exceptions like this:
 
 ```
 Caused by: javax.net.ssl.SSLHandshakeException: PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
 ```
 
-Look at the command for `make create-keystore` to understand ho to create a truststore that includes a CA certificate. You DO NOT need the private key. You only need to convince JAVA to trust the non-standard CA certificate. 
+Look at the command for `make create-keystore` to understand ho to create a truststore that includes a CA certificate. You DO NOT need the private key. You only need to convince JAVA to trust the non-standard CA certificate. Add jvm properties like this to your java command: 
 
+```
+-Djavax.net.ssl.trustStore=/Users/dave/code/camunda-8-helm-recipes/recipes/tls-self-signed-certs/certs/truststore.jks
+-Djavax.net.ssl.trustStorePassword=camunda
+```
+
+## Clean up
+Run `make clean` to remove the tls secrets and delete the `certs` directory along with all certificate related generated files
