@@ -28,14 +28,14 @@ The camunda values.yaml files use `tls-secret` and `grpc-tls-secret` secrets ins
 
 Here's a recorded demo: 
 
-<video src="./docs/create-and-configure-tls.mp4" controls title="How to create and use CA and tls certs" style="max-width: 100%;">
+<video src="https://github.com/user-attachments/assets/41464897-68aa-4532-a52b-b5afea005b66" controls title="How to create and use CA and tls certs" style="max-width: 100%;">
 </video>
 
 ## Trust the Certificate Authority (CA)
 
 Here's a video showing how to trust the CA on Mac OS:
 
-<video src="./docs/trust-tls-cert.mp4" controls title="Trust self-signed cert on Mac OS" style="max-width: 100%;">
+<video src="https://github.com/user-attachments/assets/aca18646-3921-47fc-862b-3c2197162127" controls title="Trust self-signed cert on Mac OS" style="max-width: 100%;">
 </video>
 
 For convenience, it's also possible to use this make target to add the CA pem file to Mac OS System KeyChain: `make add-ca-cert-to-ios`
@@ -46,7 +46,7 @@ For convenience, it's also possible to use this make target to add the CA pem fi
 
 Watch this demo to understand how to use the `truststore.jks` file created by `make create-truststore` to allow a jvm to establish tls/ssl connection to a domain using a certificate that has been issued by the CA: 
 
-<video src="./docs/trust-tls-cert-from-java.mp4" controls title="Trust self-signed cert from java" style="max-width: 100%;">
+<video src="https://github.com/user-attachments/assets/dc9905f6-fd42-4e99-a02d-7f48d782e7e9" controls title="Trust self-signed cert from java" style="max-width: 100%;">
 </video>
 
 If the jvm doesn't trust the CA, then you'll see exceptions like this:
