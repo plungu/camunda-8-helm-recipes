@@ -1,8 +1,19 @@
 # Camunda 8 Helm Recipe: Self Signed TLS Certificates 
 
-This folder contains a [Makefile](Makefile) that demonstrates how to create certificates and keystores
+> [!CAUTION]
+> **DEMO AND TESTING ONLY**
+> This recipe is strictly for demonstration, development, or proof-of-concept purposes.
+> **Do not use self-signed certificates in production environments.**
 
-## Features
+## Why this is not for Production
+Using self-signed certificates in a production environment introduces significant security risks:
+* **Lack of Trust:** Browsers and API clients will not trust the certificates by default, leading to "Connection Not Private" errors.
+* **Man-in-the-Middle (MITM) Risks:** Without a trusted Certificate Authority (CA), it is significantly easier for attackers to spoof your services.
+* **Management Overhead:** Rotating and managing trust for self-signed certs across a distributed cluster is error-prone compared to automated solutions like **cert-manager** with Let's Encrypt or an enterprise CA.
+
+## Use Cases
+
+This folder contains a [Makefile](Makefile) that demonstrates how to create certificates and keystores
 
 This recipe provides:
 - **Certificate Authority CA**: Create a self signed certificate authority
