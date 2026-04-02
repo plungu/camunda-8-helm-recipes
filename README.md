@@ -2,7 +2,7 @@
 [![Lifecycle; Incubating](https://img.shields.io/badge/Lifecycle-Proof%20of%20Concept-blueviolet)](https://github.com/Camunda-Community-Hub/community/blob/main/extension-lifecycle.md#proof-of-concept-)[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 ![Compatible with: Camunda Platform 8](https://img.shields.io/badge/Compatible%20with-Camunda%20Platform%208-0072Ce)
 
-# Camunda 8 Helm Profiles
+# Camunda 8 Helm Recipes
 
 This is a Community Project that helps to install Camunda and other supporting technologies into Kubernetes.
 
