@@ -396,6 +396,11 @@ test-aurora-from-local:
 	$(eval DB_HOST := $(shell aws rds describe-db-clusters --db-cluster-identifier $(DEPLOYMENT_NAME)-cluster --region $(AWS_REGION) --query "DBClusters[0].Endpoint" --output text))
 	@PGPASSWORD='$(POSTGRES_MASTER_PASSWORD)' psql -h $(DB_HOST) -U $(POSTGRES_MASTER_USERNAME) -d postgres -c "SELECT version();"
 
+.PHONY: test-aurora-from-local-as-camunda
+test-aurora-from-local-as-camunda:
+	$(eval DB_HOST := $(shell aws rds describe-db-clusters --db-cluster-identifier $(DEPLOYMENT_NAME)-cluster --region $(AWS_REGION) --query "DBClusters[0].Endpoint" --output text))
+	@PGPASSWORD='$(DEFAULT_PASSWORD)' psql -h $(DB_HOST) -U $(POSTGRES_CAMUNDA_USERNAME) -d postgres -c "SELECT version();"
+
 # Usage: make get-db-url DEPLOIYMENT_NAME=my-aurora
 .PHONY: get-aurora-connection-string
 get-aurora-connection-string:
