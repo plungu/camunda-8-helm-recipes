@@ -3,13 +3,11 @@ global:
     authentication:
       method: oidc
 
-  identity:
-    auth:
-      orchestration:
-        secret:
-          existingSecret: camunda-credentials
-          existingSecretKey: identity-orchestration-client-token
-        redirectUrl: <ORCHESTRATION_EXT_URL>/orchestration
-        
 orchestration:
-   contextPath: /orchestration
+  contextPath: /orchestration
+  security:
+    authentication:
+      oidc:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-orchestration-client-token"
