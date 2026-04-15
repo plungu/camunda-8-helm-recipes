@@ -29,11 +29,6 @@ global:
           existingSecretKey: identity-optimize-client-token
       webModeler:
         redirectUrl: https://example.camunda.com/modeler
-      orchestration:
-        secret:
-          existingSecret: camunda-credentials
-          existingSecretKey: identity-orchestration-client-token
-        redirectUrl: https://example.camunda.com/orchestration
     # This defines how Identity authenticates to Keycloak admin API
     # Identity will connect to Keycloak the first time it boots and create the camunda-platform realm
     keycloak:
@@ -72,6 +67,13 @@ orchestration:
       enabled: true
     api:
       enabled: true
+  security:
+    authentication:
+      oidc:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-orchestration-client-token"
+        redirectUrl: https://example.camunda.com/orchestration
 prometheusServiceMonitor:
   enabled: true
 connectors:

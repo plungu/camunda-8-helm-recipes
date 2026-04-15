@@ -11,3 +11,4 @@ orchestration:
         secret:
           existingSecret: "camunda-credentials"
           existingSecretKey: "identity-orchestration-client-token"
+        redirectUrl: <ORCHESTRATION_EXT_URL>/orchestration
