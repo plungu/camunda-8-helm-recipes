@@ -137,7 +137,7 @@ webModeler:
       - name: CAMUNDA_MODELER_CLUSTERS_0_NAME
         value: "Camunda Demo Cluster"
       - name: CAMUNDA_MODELER_CLUSTERS_0_VERSION
-        value: "8.9.0-alpha5"
+        value: "8.9.0"
       - name: CAMUNDA_MODELER_CLUSTERS_0_AUTHENTICATION
         value: "BEARER_TOKEN"
       - name: CAMUNDA_MODELER_CLUSTERS_0_URL_GRPC
