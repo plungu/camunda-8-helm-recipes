@@ -116,6 +116,19 @@ clean-kube: clean-kube-aws
 use-kube:
 	eksctl utils write-kubeconfig -c $(DEPLOYMENT_NAME) --region $(AWS_REGION)
 
+.PHONY: connect-eks
+connect-eks:
+	@echo "--- Connecting to EKS ---"
+	@aws sts get-caller-identity > /dev/null 2>&1 || \
+		(echo "AWS session expired. Re-authenticating..." && aws sso login)
+	eksctl utils write-kubeconfig -c $(DEPLOYMENT_NAME) --region $(AWS_REGION)
+	@echo ""
+	@echo "✅ Active cloud:  AWS (Amazon Web Services)"
+	@echo "   Account:       $$(aws sts get-caller-identity --query 'Account' --output text 2>/dev/null)"
+	@echo "   Identity:      $$(aws sts get-caller-identity --query 'Arn' --output text 2>/dev/null)"
+	@echo "   Cluster:       $(DEPLOYMENT_NAME) [$(AWS_REGION)]"
+	@echo "   kubectl ctx:   $$(kubectl config current-context 2>/dev/null)"
+
 .PHONY: urls
 urls:
 	@echo "Cluster: https://$(AWS_REGION).console.aws.amazon.com/eks/home?region=$(AWS_REGION)#/clusters/$(DEPLOYMENT_NAME)"
