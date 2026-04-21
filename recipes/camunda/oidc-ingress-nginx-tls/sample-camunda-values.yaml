@@ -1,6 +1,15 @@
-# Helm chart values are imported from `../camunda-values.yaml.d` via `config.mk`.
-# This file only contains additional overrides.
-# Note that array values, e.g. `zeebe.env` can NOT be merged by Helm.
+# Identity + Keycloak with internally provisioned PostgreSQL
+# Combine with oidc.yaml for OIDC authentication.
+# Mutually exclusive with identity-keycloak-external-postgres.yaml.
+#
+# Defaults already provide:
+#   identity.externalDatabase.enabled: false # only needed for resource authorization, multi-tenancy, or an external identity provider (IdP)
+#   identityPostgresql.auth.username: identity
+#   identityPostgresql.auth.database: identity
+#   identityPostgresql.auth.secretKeys.adminPasswordKey: identity-postgresql-admin-password
+#   identityPostgresql.auth.secretKeys.userPasswordKey: identity-postgresql-user-password
+#   identityKeycloak.auth.existingSecret: camunda-credentials
+#   identityKeycloak.auth.passwordSecretKey: identity-keycloak-admin-password
 elasticsearch:
   enabled: true
 global:
