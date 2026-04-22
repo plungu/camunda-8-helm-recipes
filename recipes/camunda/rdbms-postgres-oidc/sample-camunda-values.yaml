@@ -126,5 +126,3 @@ connectors:
         secret:
           existingSecret: camunda-credentials
           existingSecretKey: identity-connectors-client-token
-elasticsearch:
-  enabled: false

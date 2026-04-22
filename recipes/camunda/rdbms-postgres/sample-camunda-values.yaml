@@ -1,5 +1,3 @@
-elasticsearch:
-  enabled: false
 orchestration:
   enabled: true
   exporters:
