@@ -13,6 +13,7 @@ global:
       method: oidc
   identity:
     auth:
+      enabled: true
       publicIssuerUrl: <KEYCLOAK_EXT_URL>/auth/realms/<KEYCLOAK_REALM>
       issuerBackendUrl: http://camunda-keycloak/auth/realms/<KEYCLOAK_REALM>
       authUrl: <KEYCLOAK_EXT_URL>/auth/realms/<KEYCLOAK_REALM>/protocol/openid-connect/auth
