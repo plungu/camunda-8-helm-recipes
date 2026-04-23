@@ -22,3 +22,4 @@ include $(root)/makefiles/camunda.mk
 include $(root)/makefiles/gateway-traefik.mk
 include $(root)/makefiles/keycloak.mk
 include $(root)/makefiles/letsencrypt.mk
+include $(root)/makefiles/test.mk

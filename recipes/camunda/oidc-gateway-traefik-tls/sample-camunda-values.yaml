@@ -1,0 +1,211 @@
+# Enable external OpenSearch
+# elasticsearch and global.elasticsearch are already disabled by default.
+
+# Orchestration cluster configured for OpenSearch as secondary storage.
+# Zeebe exports to OpenSearch; Operate and Tasklist read from OpenSearch
+# Combine this with enable-opensearch.yaml which configures global.opensearch.*
+global:
+  opensearch:
+    enabled: true
+    url:
+      protocol: http
+      host: opensearch-cluster-master.shared-services.svc.cluster.local
+      port: 9200
+    auth:
+      username: admin
+      secret:
+        existingSecret: "camunda-credentials"
+        existingSecretKey: "opensearch-password"
+  security:
+    authentication:
+      method: oidc
+  identity:
+    auth:
+      publicIssuerUrl: https://example.com/auth/realms/camunda-platform
+      issuerBackendUrl: http://camunda-keycloak/auth/realms/camunda-platform
+      authUrl: https://example.com/auth/realms/camunda-platform/protocol/openid-connect/auth
+      tokenUrl: http://camunda-keycloak/auth/realms/camunda-platform/protocol/openid-connect/token
+      jwksUrl: http://camunda-keycloak/auth/realms/camunda-platform/protocol/openid-connect/certs
+      identity:
+        redirectUrl: https://example.com/identity
+      orchestration:
+        secret:
+          existingSecret: camunda-credentials
+          existingSecretKey: identity-orchestration-client-token
+        redirectUrl: https://example.com/orchestration
+      # if optimize is disabled, then this shouldn't be required,
+      # but this is a known issue that, currently, identity requires this even if optimize is disabled.
+      optimize:
+        secret:
+          existingSecret: camunda-credentials
+          existingSecretKey: identity-optimize-client-token
+      webModeler:
+        redirectUrl: https://example.com/modeler
+      enabled: true
+    # This defines how Identity authenticates to Keycloak admin API
+    # Identity will connect to Keycloak the first time it boots and create the camunda-platform realm
+    keycloak:
+      url:
+        protocol: http
+        host: camunda-keycloak
+        port: 80
+      # contextPath defaults to /auth
+      realm: /realms/camunda-platform
+      auth:
+        adminUser: admin
+        existingSecret: "camunda-credentials"
+        existingSecretKey: "identity-keycloak-admin-password"
+      contextPath: /auth
+prometheusServiceMonitor:
+  enabled: true
+connectors:
+  security:
+    authentication:
+      method: oidc
+      oidc:
+        secret:
+          existingSecret: camunda-credentials
+          existingSecretKey: identity-connectors-client-token
+# Identity configured to point to an external postgresql database
+identity:
+  enabled: true
+  firstUser:
+    secret:
+      existingSecret: "camunda-credentials"
+      existingSecretKey: "identity-first-user-password"
+  env:
+    - name: KEYCLOAK_REALM
+      value: camunda-platform
+  externalDatabase:
+    enabled: true
+    host: 127.0.0.1
+    port: 5432
+    database: identity
+    schema: public
+    username: identity
+    secret:
+      existingSecret: camunda-credentials
+      existingSecretKey: identity-postgresql-user-password
+# Keycloak will be installed but configure it to point to an external postgresql database
+identityKeycloak:
+  enabled: true
+  # This defines the admin user and password for Keycloak. Keycloak will create this user during first start
+  auth:
+    adminUser: admin
+    existingSecret: camunda-credentials
+    passwordSecretKey: identity-keycloak-admin-password
+  # Tell the Keycloak chart to disable its internal database so that we can configure an external one
+  postgresql:
+    enabled: false
+  # Tell the Keycloak chart to use an external database
+  externalDatabase:
+    host: 127.0.0.1
+    port: 5432
+    database: keycloak
+    schema: public
+    # The username that keycloak uses to connect to the external db
+    user: keycloak_user
+    # The password that keycloak uses to connect to the external database
+    existingSecret: camunda-credentials
+    existingSecretPasswordKey: identity-keycloak-user-password
+webModeler:
+  contextPath: /modeler
+  enabled: true
+  restapi:
+    mail:
+      # This value is required, otherwise the restapi pod wouldn't start.
+      fromAddress: noreply@example.com
+    env:
+      - name: CAMUNDA_MODELER_CLUSTERS_0_ID
+        value: "camunda-demo-cluster"
+      - name: CAMUNDA_MODELER_CLUSTERS_0_NAME
+        value: "Camunda Demo Cluster"
+      - name: CAMUNDA_MODELER_CLUSTERS_0_VERSION
+        value: "8.9.0"
+      - name: CAMUNDA_MODELER_CLUSTERS_0_AUTHENTICATION
+        value: "BEARER_TOKEN"
+      - name: CAMUNDA_MODELER_CLUSTERS_0_URL_GRPC
+        value: "grpc://camunda-zeebe-gateway:26500"
+      - name: CAMUNDA_MODELER_CLUSTERS_0_URL_REST
+        value: "http://camunda-zeebe-gateway"
+      - name: CAMUNDA_MODELER_CLUSTERS_0_URL_WEBAPP
+        value: "http://camunda-zeebe/orchestration"
+      - name: CAMUNDA_MODELER_CLUSTERS_0_AUTHORIZATIONS_ENABLED
+        value: "true"
+      - name: LOGGING_LEVEL_IO_GRPC
+        value: "TRACE"
+      - name: LOGGING_LEVEL_IO_CAMUNDA_MODELER
+        value: "DEBUG"
+      - name: SPRING_PROFILES_INCLUDE
+        value: "default-logging"
+    externalDatabase:
+      enabled: true
+      host: "127.0.0.1"
+      port: 5432
+      database: "modeler"
+      user: "modeler_user"
+      secret:
+        existingSecret: "camunda-credentials"
+        existingSecretKey: "webmodeler-postgresql-user-password"
+orchestration:
+  enabled: true
+  contextPath: "/orchestration"
+  data:
+    secondaryStorage:
+      opensearch:
+        auth:
+          secret:
+            existingSecret: "camunda-credentials"
+            existingSecretKey: "opensearch-password"
+  env:
+    - name: SPRING_PROFILES_ACTIVE
+      value: "broker,identity,operate,tasklist,consolidated-auth"
+    - name: SERVER_FORWARD_HEADERS_STRATEGY
+      value: "framework"
+# Optimize connected to OpenSearch
+# Host/port/protocol/username fall back to global.opensearch settings
+# from enable-opensearch.yaml, so only component-specific overrides here.
+optimize:
+  enabled: true
+  contextPath: "/optimize"
+  database:
+    opensearch:
+      auth:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "opensearch-password"
+  security:
+    authentication:
+      oidc:
+        redirectRootUrl: "https://example.com"
+console:
+  enabled: true
+  contextPath: "/console"
+  overrideConfiguration: |
+    camunda:
+      console:
+        managed:
+          releases:
+            - name: "camunda"
+              namespace: "camunda"
+              components:
+                - id: "console"
+                  url: "https://example.com/console"
+                - id: "keycloak"
+                  url: "https://example.com/auth"
+                - id: "identity"
+                  url: "https://example.com/management"
+                - id: "webModelerWebApp"
+                  url: "https://example.com/modeler"
+                - id: "optimize"
+                  url: "https://example.com/optimize"
+                - id: "connectors"
+                  url: "https://example.com/connectors"
+                - id: "operate"
+                  url: "https://example.com/orchestration/operate"
+                - id: "tasklist"
+                  url: "https://example.com/orchestration/tasklist"
+                - id: "orchestration"
+                  urls:
+                    grpc: "https://grpc.example.com:443"
+                    http: "https://example.com/orchestration"
