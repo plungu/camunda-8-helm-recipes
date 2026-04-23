@@ -1,0 +1,10 @@
+# Optimize connected to Elasticsearch.
+# Host/port/protocol fall back to global.elasticsearch settings
+# from enable-elasticsearch.yaml, so only component-specific overrides here.
+optimize:
+  enabled: true
+  contextPath: "/optimize"
+  security:
+    authentication:
+      oidc:
+        redirectRootUrl: "<OPTIMIZE_EXT_URL>"

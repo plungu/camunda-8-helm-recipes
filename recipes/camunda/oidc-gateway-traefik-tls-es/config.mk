@@ -21,6 +21,8 @@ CAMUNDA_HELM_VALUES ?= \
   $(root)/camunda-values.yaml.d/modeler-internal-postgres.yaml \
   $(root)/camunda-values.yaml.d/orchestration-elasticsearch.yaml \
   $(root)/camunda-values.yaml.d/orchestration-oidc.yaml \
+  $(root)/camunda-values.yaml.d/optimize-elasticsearch.yaml \
+  $(root)/camunda-values.yaml.d/console-enabled.yaml \
   $(root)/camunda-values.yaml.d/enable-multitenancy.yaml \
   ./my-camunda-values.yaml
 

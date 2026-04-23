@@ -10,7 +10,9 @@ This recipe provides:
 - **Keycloak and Identity** — OIDC authentication with internally provisioned PostgreSQL
 - **Orchestration Cluster** — Zeebe broker with embedded Operate & Tasklist, Elasticsearch backend
 - **Connectors** — with OIDC authentication
+- **Optimize** — connected to Elasticsearch
 - **Web Modeler** — webapp + websockets, internally provisioned PostgreSQL
+- **Console** — with managed release configuration
 - **Elasticsearch** — bundled cluster (OpenSearch disabled)
 - **Multi-tenancy** — enabled
 
@@ -37,6 +39,8 @@ The `camunda-values.yaml` is composed from reusable fragments in [`camunda-value
 | `modeler-internal-postgres.yaml` | Modeler internally provisioned PostgreSQL |
 | `orchestration-elasticsearch.yaml` | Orchestration with Elasticsearch secondary storage |
 | `orchestration-oidc.yaml` | OIDC configuration for Orchestration |
+| `optimize-elasticsearch.yaml` | Optimize connected to Elasticsearch |
+| `console-enabled.yaml` | Console with managed releases |
 | `enable-multitenancy.yaml` | Multi-tenancy support |
 
 See [`my-camunda-values.yaml`](./my-camunda-values.yaml) for additional overrides (resources, env vars).
@@ -86,6 +90,10 @@ Key variables to set in your root `config.mk`:
 ```makefile
 HOST_NAME = my-camunda.example.com
 TLS_SECRET_NAME = my-tls-secret
+
+# All component URLs default to https://$(HOST_NAME) — override individually if needed:
+# OPTIMIZE_EXT_URL = https://my-camunda.example.com
+# CONSOLE_EXT_URL  = https://my-camunda.example.com
 ```
 
 ## Troubleshooting
