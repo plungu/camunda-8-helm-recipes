@@ -5,3 +5,4 @@
 /recipes/tls-self-signed-certs/certs
 .DS_Store
 **/ebs-csi-driver-trust-policy.json
+**/ingress-routes.yaml
