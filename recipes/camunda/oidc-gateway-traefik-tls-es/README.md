@@ -1,4 +1,4 @@
-# Camunda 8 with OIDC, Traefik Gateway & TLS
+# Camunda 8 with OIDC, Traefik Gateway, TLS & Elasticsearch
 
 Sample of how to configure Camunda 8.9 with Traefik IngressRoute CRDs and TLS certificates.
 Keycloak is used for OIDC authentication. All components share a single domain with context-path routing, consistent with the nginx ingress recipes.
@@ -7,21 +7,18 @@ Keycloak is used for OIDC authentication. All components share a single domain w
 
 This recipe provides:
 - **Traefik IngressRoute CRDs** — HTTP→HTTPS redirect, path-based routing, gRPC routing for Zeebe
-- **Keycloak and Identity** — OIDC authentication with external PostgreSQL
-- **Orchestration Cluster** — Zeebe broker with embedded Operate & Tasklist
+- **Keycloak and Identity** — OIDC authentication with internally provisioned PostgreSQL
+- **Orchestration Cluster** — Zeebe broker with embedded Operate & Tasklist, Elasticsearch backend
 - **Connectors** — with OIDC authentication
-- **Optimize** — connected to OpenSearch
-- **Web Modeler** — webapp + websockets, external PostgreSQL
-- **Console** — with managed release configuration
-- **OpenSearch** — external cluster (Elasticsearch disabled)
+- **Web Modeler** — webapp + websockets, internally provisioned PostgreSQL
+- **Elasticsearch** — bundled cluster (OpenSearch disabled)
+- **Multi-tenancy** — enabled
 
 ## Prerequisites
 
 - An existing Kubernetes cluster with **Traefik** installed (see [`recipes/gateway-traefik`](../../gateway-traefik))
 - Traefik CRDs (`IngressRoute`, `IngressRouteTCP`, `Middleware`) available in the cluster
-- **OpenSearch** cluster accessible from the Camunda namespace
-- **External PostgreSQL** for Keycloak and Web Modeler databases
-- A TLS secret (or cert-manager) for your domain
+- A TLS secret (or cert-manager) for your domain — see [`recipes/letsencrypt`](../../letsencrypt)
 - `kubectl` configured to connect to your cluster
 - `helm` version 3.7.0 or later
 - GNU `make`
@@ -32,15 +29,15 @@ The `camunda-values.yaml` is composed from reusable fragments in [`camunda-value
 
 | Fragment | Purpose |
 |---|---|
-| `enable-opensearch.yaml` | Global OpenSearch connection |
+| `enable-elasticsearch.yaml` | Bundled Elasticsearch cluster |
 | `enable-metrics.yaml` | Prometheus ServiceMonitor |
-| `oidc.yaml` | OIDC authentication (issuer URLs, client secrets, redirects) |
-| `identity-keycloak-external-postgres.yaml` | Identity + Keycloak + external database |
+| `oidc.yaml` | OIDC authentication (issuer URLs, client secrets, redirects, Keycloak admin connection) |
+| `identity-keycloak-internal-postgres.yaml` | Identity + Keycloak + internally provisioned PostgreSQL |
 | `modeler-enabled.yaml` | Web Modeler base config |
-| `modeler-external-postgres.yaml` | Modeler external database |
-| `orchestration-opensearch.yaml` | Orchestration with OpenSearch |
-| `optimize-opensearch.yaml` | Optimize connected to OpenSearch |
-| `console-enabled.yaml` | Console with managed releases |
+| `modeler-internal-postgres.yaml` | Modeler internally provisioned PostgreSQL |
+| `orchestration-elasticsearch.yaml` | Orchestration with Elasticsearch secondary storage |
+| `orchestration-oidc.yaml` | OIDC configuration for Orchestration |
+| `enable-multitenancy.yaml` | Multi-tenancy support |
 
 See [`my-camunda-values.yaml`](./my-camunda-values.yaml) for additional overrides (resources, env vars).
 
@@ -89,8 +86,6 @@ Key variables to set in your root `config.mk`:
 ```makefile
 HOST_NAME = my-camunda.example.com
 TLS_SECRET_NAME = my-tls-secret
-POSTGRES_HOST = 10.0.0.1
-OPENSEARCH_HOST = opensearch.shared.svc.cluster.local
 ```
 
 ## Troubleshooting
@@ -104,11 +99,11 @@ OPENSEARCH_HOST = opensearch.shared.svc.cluster.local
 - Ensure the `issuerBackendUrl` points to the cluster-internal Keycloak service
 - Check Keycloak realm and client configuration
 
+### Identity cannot connect to Keycloak
+- Ensure `global.identity.auth.enabled: true` is set (handled by `oidc.yaml`)
+- Confirm the `camunda-keycloak` service is running: `kubectl get svc -n camunda`
+
 ### Traefik routes not working
 - Verify CRDs are installed: `kubectl get crd ingressroutes.traefik.io`
 - Check IngressRoute status: `kubectl get ingressroute -n camunda`
 - Review Traefik logs: `kubectl logs -l app.kubernetes.io/name=traefik`
-
-### OpenSearch connection issues
-- Verify connectivity from the namespace
-- Check credentials in the `camunda-credentials` secret
