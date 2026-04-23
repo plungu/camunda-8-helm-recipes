@@ -12,13 +12,16 @@ POSTGRES_MODELER_HOST ?= $(POSTGRES_HOST)
 POSTGRES_MODELER_DB ?= modeler
 POSTGRES_MODELER_USERNAME ?= modeler_user
 
+POSTGRES_IDENTITY_DB ?= identity
+POSTGRES_IDENTITY_USERNAME ?= identity
+
 # Camunda installation
 CAMUNDA_NAMESPACE ?= camunda
 CAMUNDA_RELEASE_NAME ?= camunda
 
 CAMUNDA_CHART ?= camunda/camunda-platform
-CAMUNDA_HELM_CHART_VERSION ?= 14.0.0-alpha5
-CAMUNDA_VERSION ?= 8.9.0-alpha5
+CAMUNDA_HELM_CHART_VERSION ?= 14.0.0
+CAMUNDA_VERSION ?= 8.9.0
 
 CAMUNDA_HELM_VALUES ?= \
   $(root)/camunda-values.yaml.d/enable-opensearch.yaml \
